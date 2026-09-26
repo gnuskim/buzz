@@ -474,3 +474,5 @@ mod parse_query_tests {
         );
     }
 }
+
+mod artifact;
