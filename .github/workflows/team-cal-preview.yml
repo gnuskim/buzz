@@ -136,6 +136,10 @@ jobs:
     env:
       TARGET: x86_64-pc-windows-msvc
     steps:
+      # Patches are LF; check the sources out as LF too or they do not apply.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.UPSTREAM_REPO }}
@@ -151,7 +155,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config core.autocrlf false
           for p in $(printf '%s\n' team/team-patches/*.patch | sort -V); do
             echo "Applying $(basename "$p")"
             git apply --3way "$p"
