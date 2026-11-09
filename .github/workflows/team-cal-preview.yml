@@ -1,12 +1,7 @@
-# Preview build of the team app with patch 103 (sprint calendar) for teammates
-# who need it before the official Team Release: macOS Apple Silicon, macOS
-# Intel and Windows, published as the `team-cal-preview` release of this fork
-# together with one-line install scripts (preview/install.sh, install.ps1).
-#
-# Same recipe as team-release.yml (official desktop tag + team-patches/*.patch
-# by number) minus updater signing: the macOS apps keep the team updater feed,
-# so they move to the official team build once one newer than this is
-# published there.
+# Windows build of the official team patches (the team release is macOS only),
+# published as the `team-cal-preview` release of this fork together with the
+# one-line install scripts. macOS users get the official team build from
+# preview/install.sh; there is no macOS build here.
 
 name: Team calendar preview
 
@@ -29,106 +24,12 @@ concurrency:
 env:
   UPSTREAM_REPO: block/buzz
   UPSTREAM_TAG: desktop-v0.5.28
-  VERSION: 0.5.28-team.11.1
+  VERSION: 0.5.28-team.12
   UPDATER_ENDPOINT: https://github.com/EugeneBot01/buzz/releases/download/team-latest/latest.json
   # Public key of the team updater (from the installed team app; public data).
   UPDATER_PUBLIC_KEY: dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBM0Q0Qzc2Mzk5QjUyMTQKUldRVVVwczVka3c5cWxjdWRCb05vRTZ3ZFVtOHlHZHJqV2RsNnJYOXlSZHFZWTFCSGdyUHRsZlMK
 
 jobs:
-  macos:
-    name: macOS (${{ matrix.arch }})
-    runs-on: macos-latest
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            target: aarch64-apple-darwin
-          - arch: x64
-            target: x86_64-apple-darwin
-    env:
-      TARGET: ${{ matrix.target }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ env.UPSTREAM_TAG }}
-          persist-credentials: false
-
-      - uses: actions/checkout@v4
-        with:
-          path: team
-          persist-credentials: false
-
-      - name: Apply team patches
-        run: |
-          set -euo pipefail
-          for p in $(printf '%s\n' team/team-patches/*.patch | sort -V); do
-            echo "Applying $(basename "$p")"
-            git apply --3way "$p"
-          done
-
-      - uses: cashapp/activate-hermit@v1
-
-      - name: Install desktop dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Add Rust target
-        run: rustup target add "$TARGET"
-
-      - name: Patch version
-        run: |
-          cd desktop && node scripts/set-version-from-tag.mjs "$VERSION"
-          cd src-tauri && cargo update --workspace
-
-      - name: Generate release config (team updater, ad-hoc signing)
-        env:
-          BUZZ_UPDATER_PUBLIC_KEY: ${{ env.UPDATER_PUBLIC_KEY }}
-          BUZZ_UPDATER_ENDPOINT: ${{ env.UPDATER_ENDPOINT }}
-        run: |
-          set -euo pipefail
-          cd desktop
-          node scripts/build-release-config.mjs
-          node -e '
-            const fs = require("node:fs");
-            const f = "src-tauri/tauri.release.conf.json";
-            const c = JSON.parse(fs.readFileSync(f, "utf8"));
-            c.bundle.macOS = { ...(c.bundle.macOS || {}), signingIdentity: "-" };
-            c.bundle.createUpdaterArtifacts = false;
-            fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
-          '
-
-      - name: Build sidecars
-        run: |
-          set -euo pipefail
-          cargo build --release --target "$TARGET" -p buzz-acp -p buzz-agent -p buzz-backend-kubernetes -p buzz-dev-mcp -p git-credential-nostr -p buzz-cli
-          ./scripts/bundle-sidecars.sh "$TARGET"
-
-      - name: Build app
-        env:
-          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
-          CMAKE_OSX_DEPLOYMENT_TARGET: "10.15"
-        run: cd desktop && pnpm tauri build --verbose --target "$TARGET" --bundles app --config src-tauri/tauri.release.conf.json
-
-      - name: Verify and zip
-        run: |
-          set -euo pipefail
-          APP="desktop/src-tauri/target/$TARGET/release/bundle/macos/Buzz.app"
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist"
-          lipo -archs "$APP/Contents/MacOS/buzz-desktop"
-          mkdir -p out
-          ditto -c -k --keepParent "$APP" "out/Buzz-macos-${{ matrix.arch }}.zip"
-          ls -la out
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}
-          path: out/*.zip
-          if-no-files-found: error
-
   windows:
     name: Windows (x64)
     runs-on: windows-latest
@@ -209,6 +110,9 @@ jobs:
         shell: bash
         env:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          # build.rs compiles the updater in only when these are set here too.
+          BUZZ_UPDATER_PUBLIC_KEY: ${{ env.UPDATER_PUBLIC_KEY }}
+          BUZZ_UPDATER_ENDPOINT: ${{ env.UPDATER_ENDPOINT }}
         run: cd desktop && pnpm tauri build --verbose --target "$TARGET" --bundles nsis --config src-tauri/tauri.release.conf.json
 
       - name: Collect installer
@@ -229,7 +133,7 @@ jobs:
 
   publish:
     name: Publish preview release
-    needs: [macos, windows]
+    needs: [windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -254,11 +158,11 @@ jobs:
         run: |
           set -euo pipefail
           TAG=team-cal-preview
-          NOTES="Buzz 팀 빌드 미리보기 ${VERSION} (patch 103: 스프린트 보드 · 팀원 일정 · 배포). 설치 방법은 preview/README.md 참고."
+          NOTES="Buzz 팀 빌드 ${VERSION} 설치. macOS는 install.sh가 공식 팀 빌드를 받고, Windows는 이 릴리스의 설치 파일을 씁니다. 설치 방법은 preview/README.md 참고."
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
-            gh release edit "$TAG" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --title "Buzz 팀 빌드 설치 ${VERSION}" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" dist/* --target "$GITHUB_SHA" --prerelease \
-              --title "Buzz 팀 캘린더 미리보기 ${VERSION}" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+              --title "Buzz 팀 빌드 설치 ${VERSION}" --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
           fi
