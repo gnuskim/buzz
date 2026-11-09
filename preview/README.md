@@ -1,4 +1,4 @@
-# Buzz 팀 빌드 설치 (0.5.28-team.12)
+# Buzz 팀 빌드 설치 (Windows 0.5.28-team.13)
 
 - macOS (M 칩 · 인텔 자동 선택): `curl -fsSL https://github.com/gnuskim/buzz/releases/download/team-cal-preview/install.sh | bash`
   공식 팀 빌드(EugeneBot01/buzz)를 설치합니다. 이후 새 버전은 앱의 업데이트 배너로 받습니다.

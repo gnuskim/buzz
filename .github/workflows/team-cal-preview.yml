@@ -24,7 +24,7 @@ concurrency:
 env:
   UPSTREAM_REPO: block/buzz
   UPSTREAM_TAG: desktop-v0.5.28
-  VERSION: 0.5.28-team.12
+  VERSION: 0.5.28-team.13
   UPDATER_ENDPOINT: https://github.com/EugeneBot01/buzz/releases/download/team-latest/latest.json
   # Public key of the team updater (from the installed team app; public data).
   UPDATER_PUBLIC_KEY: dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBM0Q0Qzc2Mzk5QjUyMTQKUldRVVVwczVka3c5cWxjdWRCb05vRTZ3ZFVtOHlHZHJqV2RsNnJYOXlSZHFZWTFCSGdyUHRsZlMK
